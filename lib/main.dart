@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:file_picker/file_picker.dart';
 
 void main() {
   runApp(const MyApp());
@@ -104,6 +105,67 @@ class _PredictionPageState extends State<PredictionPage> {
     }
   }
 
+  Future<void> pickExcelFile() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['csv'],
+        withData: true,
+      );
+
+      if (result == null || result.files.single.bytes == null) {
+        return; // Kullanıcı iptal etti
+      }
+
+      final bytes = result.files.single.bytes!;
+      final content = utf8.decode(bytes);
+
+      // Satırlara böl, boş satırları at
+      final lines = content
+          .split(RegExp(r'\r?\n'))
+          .where((l) => l.trim().isNotEmpty)
+          .toList();
+
+      if (lines.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Dosya boş!')),
+        );
+        return;
+      }
+
+      // Veri satırını seç: 2 satır varsa 2.si (başlık + veri), 1 satır varsa onu kullan
+      final dataLine = lines.length >= 2 ? lines[1] : lines[0];
+
+      // Virgül veya noktalı virgülle ayrılmış olabilir
+      final parts = dataLine.contains(';')
+          ? dataLine.split(';')
+          : dataLine.split(',');
+
+      if (parts.length < 30) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('En az 30 sütun olmalı! (Bulunan: ${parts.length})')),
+        );
+        return;
+      }
+
+      for (int i = 0; i < 30; i++) {
+        final raw = parts[i].trim().replaceAll(',', '.');
+        final val = double.tryParse(raw);
+        controllers[i].text = val?.toString() ?? '';
+      }
+
+      setState(() {}); // Ekranı güncelle
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('✅ CSV verisi başarıyla yüklendi!')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Dosya okuma hatası: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -144,6 +206,17 @@ class _PredictionPageState extends State<PredictionPage> {
               label: const Text('Örnek Hasta Verisi Doldur'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: const Color(0xFFE76F8A),
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // CSV/Excel yükleme butonu
+            OutlinedButton.icon(
+              onPressed: pickExcelFile,
+              icon: const Icon(Icons.upload_file),
+              label: const Text('CSV/Excel\'den Veri Yükle'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF4C72B0),
               ),
             ),
             const SizedBox(height: 16),
